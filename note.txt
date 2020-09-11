@@ -3,30 +3,38 @@ git init
 git add README.md
 git commit -m "first commit"
 git remote add origin git@github.com:carlchen-telus/cloudtasks-sample.git
+
 git push -u origin master
 ===========================================
  git branch --set-upstream-to=origin/master master
  git pull --allow-unrelated-histories
  git pull origin master
  ================
- docker build --no-cache -t gkeappdemo .
+ create Dockerfile and run window powershell
+ docker build --no-cache -t gkeappdemo/cloudsample:v1 .
  docker run -it --rm -p 8080:8080 gkeappdemo
+ 
+ if encounter problem, restart docker desktop or 
+> cd C:\Program Files\Docker\Docker\resources
+> docker.exe
+then execute 'docker version' on a new powershell as administrator
  ==============
  gcloud auth login
  gcloud projects list
  gcloud config list
  gcloud config set project level-amphora-275105
  ============Create Cloud Task
- gcloud tasks queues create [QUEUE_ID]
- gcloud tasks queues describe [QUEUE_ID]
+ gcloud tasks queues create test
+ gcloud tasks queues describe test
  =============Create Cloud SQL
  gcloud sql instances create synccloudtasks-instance --zone=us-west4-a
  gcloud sql databases create syncloudtasks --instance synccloudtasks-instance
  gcloud sql instances describe synccloudtasks-instance |grep connectionName
  
+  gcloud sql instances describe cloudtaskdb
  database view current connections: show processlist;
  ==============Create GKE Clouster
- gcloud container clusters create cloudtask-sample --num-nodes=3 --region=us-west4-a --scopes=cloud-platform # cloud-platform scope allows cluster access to cloudtask
+ gcloud container clusters create cloudtask-sample --num-nodes=3 --region=us-west4-a --scopes=default,cloud-platform,pubsub,sql-admin --enable-ip-alias --enable-private-nodes  --master-ipv4-cidr=10.10.0.0/28 # cloud-platform scope allows cluster access to cloudtask
  gcloud config set container/cluster cloudtask-sample
  ==============build GCP image in container registery
  gcloud builds submit --tag=gcr.io/level-amphora-275105/gkeappdemo:v1 . 
@@ -59,9 +67,10 @@ kubectl apply -f deployment-ingress.yaml
 make sure the application path "/" return 200 for ingress to do health check. 
 
  ============ Update GKE with new version
- gcloud builds submit --tag=gcr.io/level-amphora-275105/gkeappdemo:v2 .
-$ kubectl set image deployment/cloudsample-deployment cloudsample=gcr.io/level-amphora-275105/gkeappdemo:v10 #gkeappdemo is container name
+ gcloud builds submit --tag=gcr.io/level-amphora-275105/gkeappdemo:v27 .
+$ kubectl set image deployment/cloudsample cloudsample=gcr.io/level-amphora-275105/gkeappdemo:v10 #gkeappdemo is container name
 $ kubectl get service
+
 
 ====
 curl http://34.125.225.87/task/1
@@ -81,9 +90,7 @@ cloud_sql_proxy -instances=level-amphora-275105:us-west4:synccloudtasks-instance
 
 cloud_sql_proxy -instances=level-amphora-275105:us-west4:cloudtaskdb=tcp:1433 -credential_file C:\Users\t835630\git\repository\cloudtasks-sample\MyFirstProject-a6aa03f03237.json
 ================== add environment variable
-gcloud composer environments update test-environment 
-   --location us-west4 
-   --update-env-variables=SPRING_CLOUD_GCP_LOGGING_PROJECT_ID=[gcp project id],LOCATION_ID=[],QUEUE_ID=[queue],TARGET_URL=[url]
+gcloud composer environments update test-environment --location us-west4 --update-env-variables=SPRING_CLOUD_GCP_LOGGING_PROJECT_ID=level-amphora-275105,LOCATION_ID=us-west4,QUEUE_ID=test,TARGET_URL=http://34.125.225.87/taskHandler
 
 
 =======================
@@ -91,10 +98,10 @@ Connecting from Google Kubernetes Engine
 https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
 
 Enable Workload Identity on an existing cluster
-gcloud container clusters update  cloudtasksample --workload-pool=level-amphora-275105.svc.id.goog  --zone=us-west4-a
+gcloud container clusters update  cloudtask-sample --workload-pool=level-amphora-275105.svc.id.goog  --zone=us-west4-a
 
 Connect to the K8S cluster
-gcloud container clusters get-credentials cloudtasksample --zone us-west4-a --project level-amphora-275105
+gcloud container clusters get-credentials cloudtask-sample --zone us-west4-a --project level-amphora-275105
 
 kubectl get namespace
 
@@ -145,3 +152,109 @@ https://docs.cloudera.com/documentation/enterprise/6/6.1/topics/cm_sg_openssl_jk
 =======PostgreSQL==========
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "fieldenablement.telus";
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "jiquan.chen@gmail.com";
+
+
+
+
+################# privte GKE ###############
+https://cloud.google.com/solutions/creating-kubernetes-engine-private-clusters-with-net-proxies
+
+gcloud compute networks create k8s-proxy --subnet-mode=custom
+
+gcloud compute networks subnets create subnet-cluster \
+     --network=k8s-proxy --range=10.50.0.0/16
+
+gcloud compute instances create --subnet=subnet-cluster \
+     --scopes cloud-platform proxy-temp default sql-admin storage-full cloud-source-repos service-control
+
+NAME                ZONE        MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP     STATUS
+proxy-temp          us-west4-a  n1-standard-1               10.50.0.7    34.125.14.42    RUNNING
+default             us-west4-a  n1-standard-1               10.50.0.4    34.125.225.87   RUNNING
+sql-admin           us-west4-a  n1-standard-1               10.50.0.6    34.125.195.181  RUNNING
+storage-full        us-west4-a  n1-standard-1               10.50.0.5    34.125.191.224  RUNNING
+cloud-source-repos  us-west4-a  n1-standard-1               10.50.0.2    34.125.49.96    RUNNING
+service-control     us-west4-a  n1-standard-1               10.50.0.3    34.125.11.2     RUNNING
+
+export CLIENT_IP=`gcloud compute instances describe proxy-temp \
+    --format="value(networkInterfaces[0].networkIP)"`
+    
+gcloud compute firewall-rules create k8s-proxy-ssh --network k8s-proxy \
+    --allow tcp:22
+
+gcloud container clusters create cloudtask-sample  \
+    --num-nodes=3 \
+    --master-ipv4-cidr=172.16.0.64/28 \
+    --network k8s-proxy \
+    --subnetwork=subnet-cluster \
+    --enable-ip-alias \
+    --enable-private-nodes \
+    --enable-private-endpoint \
+    --master-authorized-networks $CLIENT_IP/32 \
+    --enable-master-authorized-networks \
+    --scopes=default,cloud-platform,pubsub,sql-admin 
+
+gcloud compute ssh proxy-temp
+ Enter passphrase: test
+Enter passphrase for key '/home/jiquan_chen/.ssh/google_compute_engine':test
+The key fingerprint is:
+SHA256:tt38gqk+Yy9GJ2td8DbKWB2WgsNOb6RwhJnhdT+qsVs jiquan_chen@cs-487474853659-default-default-lkl2h
+The key's randomart image is:
++---[RSA 2048]----+
+|      .=. .      |
+|     .+... .     |
+|      .o .  o.   |
+|      . * +.+.   |
+|       =S=.* .   |
+|       .=*=o*    |
+|       .+XE*o.   |
+|        Xo* ..   |
+|       =+*.  ..  |
++----[SHA256]-----+
+
+sudo apt-get install kubectl
+
+export PROJECT_ID=`gcloud config list --format="value(core.project)"`
+
+gcloud container clusters get-credentials cloudtask-sample \
+--zone us-west4-a --internal-ip
+
+gcloud container clusters update  cloudtask-sample --workload-pool=level-amphora-275105.svc.id.goog  --zone=us-west4-a
+
+kubectl apply -f service-account.yaml
+
+kubectl annotate serviceaccount cloudsampleksa iam.gke.io/gcp-service-account=cloudsampleapp@level-amphora-275105.iam.gserviceaccount.com
+
+kubectl apply -f secret.yaml
+
+kubectl create -f ilb.yaml
+
+kubectl create -f deployment-balancer.yaml
+
+kubectl apply -f deployment.yaml
+
+curl -d '{"source":"source", "target":"target", "targetUrl":"http://localhost:8080", "referenceId":"referenceId", "referenceType":"referenceType", "syncId":"syncId", "status":"NEW", "requestMessage":"{\"requestMessage\":\"test\"}", "createUser":"createUser", "operationName":"operationName", "transactionId":"transactionId"}' -H 'Content-Type: application/json' http://34.125.5.152/createTask
+
+
+==========
+Configuring private services access
+https://cloud.google.com/vpc/docs/configure-private-services-access
+-Creating allocated IP address ranges
+-Creating a private connection
+
+
+
+===
+Terraform
+https://medium.com/slalom-technology/a-complete-gcp-environment-with-terraform-c087190366f0
+https://dzone.com/articles/google-gke-and-sql-with-terraform-ion-medium
+=========
+Providing your own HTTP Target task handlers 
+https://cloud.google.com/tasks/docs/creating-http-target-tasks#handler
+
+Spring Security and OpenID Connect
+https://www.baeldung.com/spring-security-openid-connect
+
+https://github.com/terraform-google-modules/terraform-google-project-factory
+
+How to use a Private Cluster in Kubernetes Engine
+https://github.com/GoogleCloudPlatform/gke-private-cluster-demo

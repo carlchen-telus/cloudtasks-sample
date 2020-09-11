@@ -63,3 +63,57 @@ CREATE TABLE TASK_QUEUE_2021_12 PARTITION OF TASK_QUEUE
 
    
 CREATE TABLE TASK_QUEUE_DEFAULT PARTITION OF TASK_QUEUE DEFAULT;
+
+
+
+CREATE TABLE job_risk_assessment (
+  job_risk_assessment_id BIGSERIAL PRIMARY KEY,
+  job_id BIGINT NOT NULL, 
+  job_assignment_id BIGINT NOT NULL,
+  effective_start_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  effective_end_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  create_user_id VARCHAR (40) NOT NULL, 
+  create_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+  last_updt_user_id VARCHAR (40) NOT NULL, 
+  last_updt_ts TIMESTAMP WITH TIME ZONE NOT NULL
+) ;
+CREATE INDEX indx_job_risk_assessment_01 ON job_risk_assessment(job_id);
+CREATE INDEX indx_job_risk_assessment_02 ON job_risk_assessment(job_assignment_id);
+
+
+CREATE TABLE job_risk_response (
+  job_risk_response_id BIGSERIAL PRIMARY KEY,
+  job_risk_assessment_id BIGINT NOT NULL, 
+  job_risk_type_cd VARCHAR (50) NOT NULL,
+  job_risk_cd VARCHAR (50) NOT NULL,
+  response_txt CHAR(1) NOT NULL, 
+  effective_start_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  effective_end_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  create_user_id VARCHAR (40) NOT NULL, 
+  create_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+  last_updt_user_id VARCHAR (40) NOT NULL, 
+  last_updt_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_job_risk_response_01
+     FOREIGN KEY (job_risk_assessment_id) 
+     REFERENCES job_risk_assessment (job_risk_assessment_id)
+) ;
+
+
+CREATE TABLE job_risk_involvement (
+  job_risk_involvement_id BIGSERIAL PRIMARY KEY,
+  job_risk_assessment_id BIGINT NOT NULL, 
+  involvement_role_cd VARCHAR (50),
+  team_member_id VARCHAR (40),
+  response_txt CHAR(1) NOT NULL, 
+  effective_start_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  effective_end_ts TIMESTAMP WITH TIME ZONE NOT NULL, 
+  create_user_id VARCHAR (40) NOT NULL, 
+  create_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+  last_updt_user_id VARCHAR (40) NOT NULL, 
+  last_updt_ts TIMESTAMP WITH TIME ZONE NOT NULL,
+  CONSTRAINT fk_job_risk_involvement_01
+     FOREIGN KEY (job_risk_assessment_id) 
+     REFERENCES job_risk_assessment (job_risk_assessment_id)
+) ;
+
+

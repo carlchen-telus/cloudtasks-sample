@@ -56,6 +56,7 @@ spec:
         image: gcr.io/cloudsql-docker/gce-proxy:1.17
         command:
           - "/cloud_sql_proxy"
-          - "-instances=level-amphora-275105:us-west4:synccloudtasks-instance=tcp:1433"
+          - "-instances=level-amphora-275105:us-west4:cloudtaskdb=tcp:5432"
+          - "-ip_address_types=PRIVATE"
         securityContext:
           runAsNonRoot: true

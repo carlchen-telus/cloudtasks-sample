@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponents;
@@ -44,7 +43,7 @@ public class CloudTaskHandler {
 	private AsyncRequestCallBack callBack;
 
 	@PostMapping(value = "/taskHandler")
-	public ResponseEntity<?> handler(UriComponentsBuilder builder, @RequestBody AsyncRequest request)  {
+	public ResponseEntity<?> handle(UriComponentsBuilder builder, @RequestBody AsyncRequest request)  {
 		MDC.put("syncId", request.getSyncId());
 		MDC.put("transactionId", request.getTransactionId());
 		MDC.put("asynId", Integer.toString(request.getId()));
